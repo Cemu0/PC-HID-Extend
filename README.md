@@ -1,5 +1,5 @@
-hmm [WhAT IS GATT](https://learn.adafruit.com/introduction-to-bluetooth-low-energy/gatt)
-
 BLE peripheral can only be connected to one central device (a mobile phone, etc.) at a time!
 
--> damn i don't want that
+So in order to connect with multiple device ... the ESP need to reset to change MAC address
+
+So this allow you to simulate BLE keyboard and Bluetooth to control other device that support BLE

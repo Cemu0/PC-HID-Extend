@@ -183,29 +183,26 @@ class SerialCommunicate():
         else:
             print("[sys] init failed !!!")
 
-    def sendData(self, x = 0, y = 0, z = 0, click = 0, keyboard = 0):
-        sendData = bytearray((str(x) + " " + str(y) + " " + str((z)) 
-                      + "_" + str(click)+  "_"  + str(keyboard) 
+    def sendData(self, x = 0, y = 0, horizontalScroll = 0, verticalScroll = 0, click = 0, keyboard = 0, device = -1):
+        if device != -1:
+            sendData = bytearray(("C" + " " + str(device) + '\n').encode()) #A 0 1_2_3^4\n
+            self.serial.write(sendData)
+        elif keyboard != 0:
+            sendData = bytearray(("B" + " " + str(keyboard) + '\n').encode()) #A 0 1_2_3^4\n
+            self.serial.write(sendData)
+        else:
+            sendData = bytearray(("A" + " " + str(x) + " " + str(y) + "_" + str((horizontalScroll)) 
+                                    + "_" + str(verticalScroll)+  "^"  + str(click) 
+                                    + '\n').encode()) #A 0 1_2_3^4\n
+            # print(sendData)
+            self.serial.write(sendData)
 
-                      + '\n').encode()) #0 0 2_3_5\n
-        self.serial.write(sendData)
-        # self.serial.flush()
-        data = self.serial.read_until(b'\n')
-        # print(y, int(data.decode("ascii")[:-2]))
-
-        # try:
-        #     if y != int(data.decode("ascii")[:-2]): 
-        #         pass
-        #         # print( x, y, int(data.decode("ascii")[:-2]))
-        # except:
-        #     print(":(")
-        #     pass
-        #     return True
-        # return False
+        data = self.serial.read(1)
+        if(data == ord('0')):
+            return False
+        return True
 
     def __del__(self):
-        # self.readingtask.terminate()
-        # self.exit = True
         self.serial.close()             # close port
         print("Self stop serial")
 
@@ -225,29 +222,59 @@ test = SerialCommunicate()
 # 0.021  125
 # 0.001  125
 # 0.0009  1000
+device = 0
 
 ###test refresh speed
 lastEnter = time.time() 
 minTime = 10
 minTimeAllow = 0.007
+
+def resetVal():
+    global device
+    global last_position_x
+    global last_position_y
+    global mx
+    global my
+    global virtual_x
+    global virtual_y
+    last_position_x = None
+    last_position_y = None
+    mx = 0
+    my = 0
+    virtual_x = 0
+    virtual_y = 0
+
 def on_move_normal(x, y):
-    # global lastEnter
     # global minTime
+    global device
     # if time.time() - lastEnter < minTime:
     #     minTime = time.time() - lastEnter 
     #     lastEnter = time.time()
     #     print(minTime)
     if x > 1919 and y > 100 and y < 1800:
+        test.sendData(device=0)
+        if device != 0:
+            device = 0
+            resetVal()
+        print("device 0")
         return False
 
-
+    if x == 0 and y > 100 and y < 1800:
+        test.sendData(device=1)
+        if device != 1:
+            device = 1
+            resetVal()
+        resetVal()
+        print("device 1")
+        return False
+    
 last_position_x = None
 last_position_y = None
 mx = 0
 my = 0
-
 virtual_x = 0
 virtual_y = 0
+exiting = False
 def on_move(x, y):
     global last_position_x
     global last_position_y
@@ -256,6 +283,7 @@ def on_move(x, y):
     global virtual_x
     global virtual_y
     global lastEnter
+    global device
 
     if time.time() - lastEnter < minTimeAllow:
         minTime = time.time() - lastEnter 
@@ -266,7 +294,7 @@ def on_move(x, y):
     #     (x, y)))
     # test.sendData(x,y)
 
-    if last_position_x and last_position_y:
+    if last_position_x is not None and last_position_y is not None:
         mx = x - last_position_x
         my = y - last_position_y
         # print(mx, my)
@@ -275,16 +303,29 @@ def on_move(x, y):
         # listener.wait
         virtual_x += mx
         virtual_y += my
-        if virtual_x < -50:
-            return False  
+        if device == 0:
+            if virtual_x < -50:
+                return False  
 
-        # print(virtual_x)-++++++++++++++++++++++++
+        if device == 1:
+            if virtual_x > 1000:
+                print("exit")
+                return False  
+        # print(virtual_x)
+    else:
+        if device == 0:
+            test.sendData(-120,0)
+        if device == 1:
+            test.sendData(120,0)
+
 
     # else:
     #     last_position_x = x
     #     last_position_y = y
 
     last_position_x, last_position_y = mouseController.position
+
+    # print(device, virtual_x, virtual_y)
 
     # listener.suppress_event() #still call back 
     # listener.
@@ -308,6 +349,7 @@ def on_click(x, y, button, pressed):
         test.sendData(0,0, click = MOUSE_FORWARD if pressed else -MOUSE_FORWARD)
     if button == Button.x1:
         test.sendData(0,0, click = MOUSE_BACK if pressed else -MOUSE_BACK)
+    
     # if not pressed:
     #     # Stop listener
     #     return False
@@ -328,6 +370,13 @@ def on_scroll(x, y, dx, dy):
 
 
 def on_press(key):
+    
+    if key == keyboard.Key.f4:
+        global exiting
+        exiting = True
+        listener.stop()
+        exit()
+
     # print(key)
     # print(key, buttonToID.get(key,'Invalided'))
     id = buttonToID.get(key, None)
@@ -364,7 +413,7 @@ def on_release(key):
     #     return False 
 
 # Collect events until released
-for _ in range(30):
+while(1):
     with mouse.Listener(
             on_move=on_move_normal) as listener:
         listener.join()
@@ -386,6 +435,9 @@ for _ in range(30):
             on_scroll=on_scroll, suppress = True) as listener:
         listener.join()
     keyboardListener.stop()
+
+    if exiting:
+        exit()
     
 
 
