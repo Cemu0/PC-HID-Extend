@@ -12,7 +12,8 @@ BleCombo bleCombo;
 
 #define PACKAGE_MOUSE 'A'
 #define PACKAGE_KEYBOARD 'B'
-#define PACKAGE_SYSTEM 'C'
+#define DEVICE_CHOSE 'C'
+#define DEBUG_DATA 'D'
 signed char inPackage[5]; //maximum package read each time
 
 //support "unlimited" number of devices
@@ -58,6 +59,7 @@ void setup() {
   currentDevice = EEPROM.read(0);
   Serial.println("device ");
   Serial.println(currentDevice);
+  bleCombo.setDelay(2); //esp32
   esp_base_mac_addr_set(&new_mac[currentDevice][0]); //address 1
   bleCombo.begin();
   bleCombo.releaseAll();
@@ -68,7 +70,7 @@ void loop() {
   if (Serial.available() > 0) {
     // char data = Serial.read();
     String data = Serial.readStringUntil('\n');
-    Serial.flush();
+    // Serial.flush();
 
     //A 1 2_3_4^5\n
     //  x y h v Click  
@@ -106,11 +108,16 @@ void loop() {
     }
     //C 1\n
     //  Devices
-    }else if(data[0] == PACKAGE_SYSTEM){
+    }else if(data[0] == DEVICE_CHOSE){
       int index1 = data.indexOf(' ');
       int device = data.substring(index1+1, data.length()).toInt();
       if(device >= 0)
         switchDevice(device);
+    }else if(data[0] == DEBUG_DATA){
+      int index1 = data.indexOf(' ');
+      int request = data.substring(index1+1, data.length()).toInt();
+      if(request >= 0)
+        Serial.println("ok");
     }
     
     if(bleCombo.isConnected())
