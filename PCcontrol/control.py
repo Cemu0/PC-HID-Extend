@@ -1,10 +1,23 @@
-import serial
 import time
 from pynput import mouse, keyboard
 import pyautogui
-from threading import Timer
+# from threading import Timer
+
+from lib.serialControl import SerialCommunicate
+from lib.serialPortlist import serial_ports
 
 from pynput.mouse import Button, Controller
+
+import argparse
+print("Welcome! this is External BLE Keyboard And Mouse control !, press F4 to exit")
+parser = argparse.ArgumentParser("External BLE Keyboard And Mouse control")
+parser.add_argument("-d","--device", help="number of device, current 1 or 2, default 1", type=int, default=1, required=False)
+parser.add_argument("-p","--port", help="port that connected to ESP32 (with the 'magic' code uploaded)port can be chosen automatic", type=str, default=None, required=False)
+args = parser.parse_args()
+
+MAX_DEVICE = args.device
+CUSTOM_PORT = args.port
+
 mouseController = Controller()
 
 screen_w, screen_h = pyautogui.size()
@@ -153,61 +166,19 @@ def typeConvert(x):
     return x
 
 
-class SerialCommunicate():
-    """
-    Class that control the LED
-    """
+portList = serial_ports()
 
-    def __init__(self):
-        """
-            initial serial port 
-        """
+print("Available port: ", portList)
 
-        self.serial = serial.Serial(
-            # port = 'COM16', \
-            port = 'COM13', \
-            baudrate=500000,\
-            parity=serial.PARITY_NONE,\
-            stopbits=serial.STOPBITS_ONE,\
-            bytesize=serial.EIGHTBITS,\
-            timeout=0.1)
+if CUSTOM_PORT is None:
+    chosenPort = portList[-1]
+else:
+    chosenPort = CUSTOM_PORT
 
-        
-        # print('[sys] init serial ', self.serial.open())
-        print('[sys] init serial ', self.serial)
-
-        # time.sleep(5)
-        data = self.serial.readline()
-        if data == b'Ready !\r\n':
-            print("[sys] init success !")
-        else:
-            print("[sys] init failed !!!")
-
-    def sendData(self, x = 0, y = 0, horizontalScroll = 0, verticalScroll = 0, click = 0, keyboard = 0, device = -1):
-        if device != -1:
-            sendData = bytearray(("C" + " " + str(device) + '\n').encode()) #A 0 1_2_3^4\n
-            self.serial.write(sendData)
-        elif keyboard != 0:
-            sendData = bytearray(("B" + " " + str(keyboard) + '\n').encode()) #A 0 1_2_3^4\n
-            self.serial.write(sendData)
-        else:
-            sendData = bytearray(("A" + " " + str(x) + " " + str(y) + "_" + str((horizontalScroll)) 
-                                    + "_" + str(verticalScroll)+  "^"  + str(click) 
-                                    + '\n').encode()) #A 0 1_2_3^4\n
-            # print(sendData)
-            self.serial.write(sendData)
-
-        data = self.serial.read(1)
-        if(data == ord('0')):
-            return False
-        return True
-
-    def __del__(self):
-        self.serial.close()             # close port
-        print("Self stop serial")
+print("Connecting port: ", chosenPort)
 
 
-test = SerialCommunicate()
+test = SerialCommunicate(chosenPort)
 
 # for i in range(100, 255):
 #     print(i)
@@ -223,13 +194,12 @@ test = SerialCommunicate()
 # 0.001  125
 # 0.0009  1000
 device = 0
-
 ###test refresh speed
 lastEnter = time.time() 
 minTime = 10
-minTimeAllow = 0.007
+minTimeAllow = 0.007 #7ms
 
-def resetVal():
+def resetVal(x = 0, y = 0):
     global device
     global last_position_x
     global last_position_y
@@ -241,17 +211,12 @@ def resetVal():
     last_position_y = None
     mx = 0
     my = 0
-    virtual_x = 0
-    virtual_y = 0
+    virtual_x = x
+    virtual_y = y
 
 def on_move_normal(x, y):
-    # global minTime
     global device
-    # if time.time() - lastEnter < minTime:
-    #     minTime = time.time() - lastEnter 
-    #     lastEnter = time.time()
-    #     print(minTime)
-    if x > 1919 and y > 100 and y < 1800:
+    if x > screen_w - 1 and y > screen_h * 0.1 and y < screen_h * 0.9:
         test.sendData(device=0)
         if device != 0:
             device = 0
@@ -259,17 +224,27 @@ def on_move_normal(x, y):
         print("device 0")
         return False
 
-    if x == 0 and y > 100 and y < 1800:
-        test.sendData(device=1)
-        if device != 1:
-            device = 1
+    if MAX_DEVICE > 1:
+        if x < 1 and y > screen_h * 0.1 and y < screen_h * 0.9:
+            test.sendData(device=1)
+            if device != 1:
+                device = 1
+                resetVal(screen_w)
             resetVal()
-        resetVal()
-        print("device 1")
-        return False
+            print("device 1")
+            return False
+
+    # if (x > screen_w * 3/4):
+    #     if device != 0:
+    #         device = 0
+    #         test.sendData(device=0)
+    # elif(x > screen_w * 1/4):
+    #     if device != 1:
+    #         device = 1
+    #         test.sendData(device=1)
     
 last_position_x = None
-last_position_y = None
+last_position_y = None 
 mx = 0
 my = 0
 virtual_x = 0
@@ -308,7 +283,7 @@ def on_move(x, y):
                 return False  
 
         if device == 1:
-            if virtual_x > 1000:
+            if virtual_x > 0:
                 print("exit")
                 return False  
         # print(virtual_x)
@@ -360,7 +335,7 @@ def on_scroll(x, y, dx, dy):
     if time.time() - lastEnter < minTimeAllow:
         minTime = time.time() - lastEnter 
         # print(minTime)
-        time.sleep(minTimeAllow - minTime)
+        # time.sleep(minTimeAllow - minTime)
     # print('Scrolled {0} at {1}'.format(
     #     'down' if dy < 0 else 'up',
     #     (x, y)))
@@ -489,3 +464,4 @@ if __name__ == '__main__':
     unittest.main()
 """
 
+# https://stackoverflow.com/questions/48629486/how-can-i-create-the-minimum-size-executable-with-pyinstaller
